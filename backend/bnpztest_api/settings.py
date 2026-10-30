@@ -137,6 +137,7 @@ DATABASES = {
         },
     }
 }
+
 # Server xatolari (500) konsolga — ya'ni `docker compose logs backend` ga tushsin.
 #
 # Django'ning standart sozlamasida xato xabarlari `require_debug_true` filtri
