@@ -75,12 +75,18 @@ WSGI_APPLICATION = "bnpztest_api.wsgi.application"
 # bo'lsa, ilova jim ishlashda davom etmaydi.
 DATABASES = {
     "default": {
+        # "ENGINE": "django.db.backends.postgresql",
+        # "NAME": os.environ.get("DB_NAME", "mytest"),
+        # "USER": os.environ.get("DB_USER", "mytest"),
+        # "PASSWORD": os.environ.get("DB_PASSWORD", "mytest"),
+        # "HOST": os.environ.get("DB_HOST", "db"),
+        # "PORT": os.environ.get("DB_PORT", "5432"),
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("DB_NAME", "mytest"),
-        "USER": os.environ.get("DB_USER", "mytest"),
-        "PASSWORD": os.environ.get("DB_PASSWORD", "mytest"),
-        "HOST": os.environ.get("DB_HOST", "db"),
-        "PORT": os.environ.get("DB_PORT", "5432"),
+        "NAME":  "mytest",
+        "USER": "postgres",
+        "PASSWORD": "shMM1514!@#",
+        "HOST":  "db",
+        "PORT": 5432,
         # Standart 0 = ulanish har so'rovdan keyin yopiladi. `manage.py
         # runserver` bilan BU QIYMAT SHUNDAY QOLISHI KERAK — 60 ga qo'yib
         # ko'rildi va ZARAR qildi (quyida).
