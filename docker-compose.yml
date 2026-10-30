@@ -1,6 +1,6 @@
 services:
   # E'TIBOR: bu konteyner ENDI ISHLATILMAYDI — backend endi tashqi (pgAdmin
-  # bilan boshqariladigan, .envda DB_HOST/DB_PORT/... orqali ko'rsatilgan)
+  # bilan boshqariladigan, .envda POSTGRES_HOST/POSTGRES_PORT/... orqali ko'rsatilgan)
   # bazaga ulanadi. Bu konteyner shunchaki eski ma'lumotlarni (pgdata volume)
   # tegilmagan holda saqlab turibdi — o'zining sozlamalari (mytest) backend
   # ishlatadigan .env qiymatlaridan ATAYLAB MUSTAQIL, aks holda ikkisi
@@ -26,7 +26,7 @@ services:
     # to'g'ridan-to'g'ri (masalan http://<server>:8000/api/...) kirib bo'lmaydi.
     expose:
       - "8000"
-    # `host.docker.internal` (.env dagi DB_HOST) — Docker o'rnatilgan kompyuterning
+    # `host.docker.internal` (.env dagi POSTGRES_HOST) — Docker o'rnatilgan kompyuterning
     # o'zi. Windows/Mac'da (Docker Desktop) bu nom o'z-o'zidan bor, Linux'da esa
     # YO'Q va backend "could not translate host name" bilan yiqiladi. Bu qator
     # nomni ikkala tizimda ham xost mashinaga yo'naltiradi.
@@ -35,15 +35,16 @@ services:
     volumes:
       - ./backend:/app
     environment:
-      DB_ENGINE: postgresql
-      # .env faylidan — quyidagi "db" xizmatidagi POSTGRES_DB/USER/PASSWORD
-      # bilan bir xil bo'lishi shart (pgAdmin ham 5434-port orqali aynan
-      # shu bazaga ulanadi — ikkisi bitta baza, faqat ikki xil manzildan).
-      DB_NAME: ${DB_NAME:-mytest}
-      DB_USER: ${DB_USER:-mytest}
-      DB_PASSWORD: ${DB_PASSWORD:-mytest}
-      DB_HOST: ${DB_HOST:-db}
-      DB_PORT: ${DB_PORT:-5432}
+      # Baza — .env dagi POSTGRES_* qiymatlari (settings.py shu nomlarni o'qiydi).
+      # .env dagi o'zgaruvchi konteynerga O'Z-O'ZIDAN tushmaydi — faqat shu
+      # ro'yxatda yozilgani uzatiladi. Ilgari bu yerda DB_* nomlari qolib, .env
+      # va settings.py esa POSTGRES_* ga o'tgan edi: backend hech narsa olmay,
+      # "localhost" ga (ya'ni konteynerning o'ziga) ulanmoqchi bo'lardi.
+      POSTGRES_DB: ${POSTGRES_DB:-mytest}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_HOST: ${POSTGRES_HOST:-host.docker.internal}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
       # .env faylidan (repo ildizida). SECRET_KEY admin tokenlarini imzolaydi —
       # standart qiymatda qolsa, kodni ko'rgan har kim o'ziga token yasay olardi.
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret-key-change-me}
