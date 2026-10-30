@@ -84,7 +84,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.postgresql",
         "NAME":  "mytest",
         "USER": "postgres",
-        "PASSWORD": "shMM1514!@#",
+        "PASSWORD": "shMM@1514!@#",
         "HOST":  "db",
         "PORT": 5432,
         # Standart 0 = ulanish har so'rovdan keyin yopiladi. `manage.py
