@@ -85,7 +85,7 @@ DATABASES = {
         "NAME":  "mytest",
         "USER": "postgres",
         "PASSWORD": "shMM1514!@#",
-        "HOST":  "db",
+        "HOST":  "localhost",
         "PORT": 5432,
         # Standart 0 = ulanish har so'rovdan keyin yopiladi. `manage.py
         # runserver` bilan BU QIYMAT SHUNDAY QOLISHI KERAK — 60 ga qo'yib
