@@ -26,6 +26,12 @@ services:
     # to'g'ridan-to'g'ri (masalan http://<server>:8000/api/...) kirib bo'lmaydi.
     expose:
       - "8000"
+    # `host.docker.internal` (.env dagi DB_HOST) — Docker o'rnatilgan kompyuterning
+    # o'zi. Windows/Mac'da (Docker Desktop) bu nom o'z-o'zidan bor, Linux'da esa
+    # YO'Q va backend "could not translate host name" bilan yiqiladi. Bu qator
+    # nomni ikkala tizimda ham xost mashinaga yo'naltiradi.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./backend:/app
     environment:
