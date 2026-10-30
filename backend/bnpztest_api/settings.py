@@ -82,62 +82,73 @@ WSGI_APPLICATION = "bnpztest_api.wsgi.application"
 # konteynerning O'ZI — "Connection refused").
 #
 # Parol kodda turmaydi: kod GitHub'da, parol esa faqat .env da bo'lishi kerak.
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.postgresql",
+#         "NAME": "mytest",
+#         "USER": "postgres",
+#         "PASSWORD": "shMM1514!@#",
+#         "HOST": "localhost",
+#         "PORT": 5432,
+#         # Standart 0 = ulanish har so'rovdan keyin yopiladi. `manage.py
+#         # runserver` bilan BU QIYMAT SHUNDAY QOLISHI KERAK — 60 ga qo'yib
+#         # ko'rildi va ZARAR qildi (quyida).
+#         #
+#         # Konteynerda esa `serve.py` (waitress) ishlaydi: oqimlar soni cheklangan
+#         # va ular qayta ishlatiladi, shuning uchun u `DB_CONN_MAX_AGE` ni o'zi
+#         # o'rnatadi. U yerda ulanishlar soni oqimlar sonidan oshmaydi — quyidagi
+#         # "to'planib qolish" holati yuz bermaydi.
+#         #
+#         # runserver bilan o'lchangan. Foydasi umuman yo'q edi (30 ta so'rov):
+#         #   CONN_MAX_AGE=0  -> 29 ta yangi ulanish, median 51.6 ms
+#         #   CONN_MAX_AGE=60 -> 29 ta yangi ulanish, median 47.6 ms
+#         # Chunki `runserver` har so'rovga YANGI OQIM yaratadi, Django esa
+#         # ulanishni oqimga bog'lab saqlaydi — yangi oqim baribir yangi ulanish
+#         # ochadi.
+#         #
+#         # Zarari esa aniq: ulanish so'rov tugagach yopilmay, oqim o'lguncha
+#         # ushlanib turadi. Yuk ostida ular to'planib, Postgres chegarasiga
+#         # (max_connections=100) yetadi. Sinovda 98 ga chiqdi va 773 ta so'rov
+#         # 500 bilan yiqildi.
+#         #
+#         # Diqqat — xato ALDAMCHI ko'rinishda chiqadi. Postgres "ulanishlar
+#         # tugadi" xabarini o'z tilida (cp1251) qaytaradi, psycopg2 uni UTF-8
+#         # deb o'qiydi va natijada traceback'da
+#         #   UnicodeDecodeError: 'utf-8' codec can't decode byte 0xc2 ...
+#         # ko'rinadi. Bu kodlash muammosi EMAS, ulanishlar tugagani.
+#         "CONN_MAX_AGE": int(os.environ.get("DB_CONN_MAX_AGE") or "0"),
+#         # Qayta ishlatilayotgan ulanish uzilib qolgan bo'lishi mumkin (baza
+#         # qayta ishga tushgan, tarmoq uzilgan). Django uni so'rov boshida
+#         # tekshiradi va kerak bo'lsa jimgina qaytadan ochadi — busiz birinchi
+#         # so'rov "server ishlamayapti" xatosi bilan qaytardi.
+#         "CONN_HEALTH_CHECKS": True,
+#         "OPTIONS": {
+#             # Javobsiz qolgan ulanish urinishi (paket jimgina tashlab yuborilsa)
+#             # aks holda TCP'ning o'z chegarasigacha — ~2 daqiqa — osilib turardi
+#             # va o'sha paytda server oqimini band qilib qo'yardi.
+#             "connect_timeout": 10,
+#             # Ulanish endi so'rovlar orasida ochiq turadi. Tarmoq bo'sh ulanishni
+#             # ogohlantirmasdan uzib qo'ysa, bu ~1 daqiqada aniqlanadi va keyingi
+#             # so'rov osilmasdan yangi ulanish ochadi.
+#             "keepalives": 1,
+#             "keepalives_idle": 30,
+#             "keepalives_interval": 10,
+#             "keepalives_count": 3,
+#         },
+#     }
+# }
+
+
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("POSTGRES_DB", "mytest"),
-        "USER": os.environ.get("POSTGRES_USER", "postgres"),
-        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", ""),
-        "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
-        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
-        # Standart 0 = ulanish har so'rovdan keyin yopiladi. `manage.py
-        # runserver` bilan BU QIYMAT SHUNDAY QOLISHI KERAK — 60 ga qo'yib
-        # ko'rildi va ZARAR qildi (quyida).
-        #
-        # Konteynerda esa `serve.py` (waitress) ishlaydi: oqimlar soni cheklangan
-        # va ular qayta ishlatiladi, shuning uchun u `DB_CONN_MAX_AGE` ni o'zi
-        # o'rnatadi. U yerda ulanishlar soni oqimlar sonidan oshmaydi — quyidagi
-        # "to'planib qolish" holati yuz bermaydi.
-        #
-        # runserver bilan o'lchangan. Foydasi umuman yo'q edi (30 ta so'rov):
-        #   CONN_MAX_AGE=0  -> 29 ta yangi ulanish, median 51.6 ms
-        #   CONN_MAX_AGE=60 -> 29 ta yangi ulanish, median 47.6 ms
-        # Chunki `runserver` har so'rovga YANGI OQIM yaratadi, Django esa
-        # ulanishni oqimga bog'lab saqlaydi — yangi oqim baribir yangi ulanish
-        # ochadi.
-        #
-        # Zarari esa aniq: ulanish so'rov tugagach yopilmay, oqim o'lguncha
-        # ushlanib turadi. Yuk ostida ular to'planib, Postgres chegarasiga
-        # (max_connections=100) yetadi. Sinovda 98 ga chiqdi va 773 ta so'rov
-        # 500 bilan yiqildi.
-        #
-        # Diqqat — xato ALDAMCHI ko'rinishda chiqadi. Postgres "ulanishlar
-        # tugadi" xabarini o'z tilida (cp1251) qaytaradi, psycopg2 uni UTF-8
-        # deb o'qiydi va natijada traceback'da
-        #   UnicodeDecodeError: 'utf-8' codec can't decode byte 0xc2 ...
-        # ko'rinadi. Bu kodlash muammosi EMAS, ulanishlar tugagani.
-        "CONN_MAX_AGE": int(os.environ.get("DB_CONN_MAX_AGE") or "0"),
-        # Qayta ishlatilayotgan ulanish uzilib qolgan bo'lishi mumkin (baza
-        # qayta ishga tushgan, tarmoq uzilgan). Django uni so'rov boshida
-        # tekshiradi va kerak bo'lsa jimgina qaytadan ochadi — busiz birinchi
-        # so'rov "server ishlamayapti" xatosi bilan qaytardi.
-        "CONN_HEALTH_CHECKS": True,
-        "OPTIONS": {
-            # Javobsiz qolgan ulanish urinishi (paket jimgina tashlab yuborilsa)
-            # aks holda TCP'ning o'z chegarasigacha — ~2 daqiqa — osilib turardi
-            # va o'sha paytda server oqimini band qilib qo'yardi.
-            "connect_timeout": 10,
-            # Ulanish endi so'rovlar orasida ochiq turadi. Tarmoq bo'sh ulanishni
-            # ogohlantirmasdan uzib qo'ysa, bu ~1 daqiqada aniqlanadi va keyingi
-            # so'rov osilmasdan yangi ulanish ochadi.
-            "keepalives": 1,
-            "keepalives_idle": 30,
-            "keepalives_interval": 10,
-            "keepalives_count": 3,
-        },
-    }
-}
-
+        "NAME": "mytest",
+        "USER": "postgres",
+        "PASSWORD": "shMM1514!@#",
+        "HOST": "localhost",
+        "PORT": 5432
+    }}
 # Server xatolari (500) konsolga — ya'ni `docker compose logs backend` ga tushsin.
 #
 # Django'ning standart sozlamasida xato xabarlari `require_debug_true` filtri
