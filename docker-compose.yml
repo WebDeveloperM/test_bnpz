@@ -1,0 +1,154 @@
+services:
+  # E'TIBOR: bu konteyner ENDI ISHLATILMAYDI — backend endi tashqi (pgAdmin
+  # bilan boshqariladigan, .envda DB_HOST/DB_PORT/... orqali ko'rsatilgan)
+  # bazaga ulanadi. Bu konteyner shunchaki eski ma'lumotlarni (pgdata volume)
+  # tegilmagan holda saqlab turibdi — o'zining sozlamalari (mytest) backend
+  # ishlatadigan .env qiymatlaridan ATAYLAB MUSTAQIL, aks holda ikkisi
+  # bir-biriga aralashib, sog'lomlik tekshiruvini buzardi.
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: mytest
+      POSTGRES_USER: mytest
+      POSTGRES_PASSWORD: mytest
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mytest"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    # Port ATAYLAB tashqariga chiqarilmagan: backend'ga faqat nginx (web servisi)
+    # konteyner tarmog'i ichidan murojaat qiladi. Shu sabab API'ga http orqali
+    # to'g'ridan-to'g'ri (masalan http://<server>:8000/api/...) kirib bo'lmaydi.
+    expose:
+      - "8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      DB_ENGINE: postgresql
+      # .env faylidan — quyidagi "db" xizmatidagi POSTGRES_DB/USER/PASSWORD
+      # bilan bir xil bo'lishi shart (pgAdmin ham 5434-port orqali aynan
+      # shu bazaga ulanadi — ikkisi bitta baza, faqat ikki xil manzildan).
+      DB_NAME: ${DB_NAME:-mytest}
+      DB_USER: ${DB_USER:-mytest}
+      DB_PASSWORD: ${DB_PASSWORD:-mytest}
+      DB_HOST: ${DB_HOST:-db}
+      DB_PORT: ${DB_PORT:-5432}
+      # .env faylidan (repo ildizida). SECRET_KEY admin tokenlarini imzolaydi —
+      # standart qiymatda qolsa, kodni ko'rgan har kim o'ziga token yasay olardi.
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret-key-change-me}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
+      # Ruxsat etilgan hostlar va CSRF ishonchli manzillari. CSRF (Django admin
+      # /it-center formalari uchun) berilmasa — SERVER_IP dan avtomatik yig'iladi,
+      # shuning uchun odatda .env da faqat SERVER_IP ni to'g'rilash yetarli.
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-*}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-https://${SERVER_IP}:2000,https://${SERVER_IP}:2050}
+      # BnpzId (employee_service) manzili — .env dagi BNPZID_HOST (host:port)
+      # dan yig'iladi. Shunда IP loyihada faqat bitta joyда (.env) turadi.
+      EMPLOYEE_SERVICE_BASE_URL: https://${BNPZID_HOST:-192.168.101.6:5000}/api/v1
+      EMPLOYEE_SERVICE_API_KEY: ${EMPLOYEE_SERVICE_API_KEY:-dev-employee-service-key}
+      EMPLOYEE_SERVICE_VERIFY_SSL: ${EMPLOYEE_SERVICE_VERIFY_SSL:-false}
+      # Tashqi dashboard uchun ochiq endpoint kaliti (/api/public/protocol/).
+      # BO'SH bo'lsa endpoint hech narsa so'ramaydi — standart holat shu.
+      PUBLIC_API_KEY: ${PUBLIC_API_KEY:-}
+
+  # --- Ishlab chiqish (dev) servislari -------------------------------------
+  # Odatda ISHGA TUSHMAYDI: ular "dev" profilida. Ishlab chiqarishda xodimlar
+  # nginx (web) orqali kiradi, Vite dev-serveri tashqariga ochilmaydi.
+  # Kerak bo'lganda:  docker compose --profile dev up -d frontend admin
+  # Portlar 5173/5174 — 2000/2050 ni band qilmasligi uchun.
+  frontend:
+    profiles: ["dev"]
+    build: ./frontend
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "2000"]
+    ports:
+      - "5173:2000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+  admin:
+    profiles: ["dev"]
+    build: ./frontend
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "2050"]
+    ports:
+      - "5174:2050"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      VITE_ADMIN_ONLY: "true"
+    depends_on:
+      - backend
+
+  # HTTPS (TLS) va teskari proksi. Yig'ilgan frontend fayllarini tarqatadi va
+  # /api, /media so'rovlarini backend'ga uzatadi — brauzer uchun hamma narsa
+  # bitta manzil bo'ladi, shu sabab "mixed content" muammosi yo'q.
+  #
+  # Sertifikat: ./nginx/certs/server.crt va server.key (qarang: nginx/README.md).
+  #
+  # Portlar avvalgidek: 2000 (xodim) va 2050 (admin) — lekin endi HTTPS.
+  # 80-port faqat yo'naltirish uchun: http://<server> yozgan xodimni
+  # https://<server>:2000 ga olib boradi.
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "2000:2000"
+      - "2050:2050"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - backend
+
+  # Jonli ekranni ko'rish (WebRTC) uchun TURN relay server. Ba'zi tarmoqlarda
+  # (firewall/xavfsizlik siyosati) ikkita ish stansiyasi orasida to'g'ridan-to'g'ri
+  # video oqim o'tkazib bo'lmaydi — TURN video trafikni shu serverning o'zi orqali
+  # (boshqa barcha so'rovlar kabi) qayta yo'naltiradi.
+  # Agar avtomatik aniqlash ishlamasa, .env dagi SERVER_IP ni Docker ishlayotgan
+  # kompyuterning LAN IP manziliga o'rnating (masalan: 192.168.2.74).
+  coturn:
+    image: coturn/coturn:4.6
+    restart: unless-stopped
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "49160-49200:49160-49200/udp"
+    environment:
+      # Serverning o'z IP manzili — .env dagi SERVER_IP dan.
+      TURN_EXTERNAL_IP: ${SERVER_IP:-}
+    # DIQQAT: xususiy manzil `hostname -I` bilan olinadi, `hostname -i` bilan EMAS.
+    #
+    # `hostname -i` nom yechish (DNS) orqali ishlaydi. Serverda u ishlamay qoldi
+    # ("Temporary failure in name resolution") va bo'sh qiymat qaytardi — natijada
+    # argument `--external-ip=192.168.101.119/` bo'lib buzildi. Coturn esa shu
+    # "private part" ni oq ro'yxatga qo'yadi va FAQAT o'sha ro'yxatdagi manzillarni
+    # tinglash uchun oladi: ro'yxat bo'sh bo'lgach, konteynerning o'z 172.x manzili
+    # chetlab o'tilib, faqat 127.0.0.1 qoldi va coturn
+    # "Cannot configure any meaningful IP listener address" bilan yiqilaverdi.
+    #
+    # `hostname -I` esa manzilni to'g'ridan-to'g'ri interfeysdan o'qiydi — DNS
+    # umuman kerak emas. U bo'sh joy bilan ajratilgan ro'yxat beradi, shuning uchun
+    # birinchisi olinadi. `cut` ataylab (`awk` emas): compose'da `$` ni ikki marta
+    # ekranlash kerak bo'lardi.
+    command: >
+      sh -c "turnserver -n --log-file=stdout -v
+      --listening-port=3478
+      --realm=bnpztest
+      --user=bnpzturn:bnpzturnsecret
+      --no-tls --no-dtls
+      --min-port=49160 --max-port=49200
+      --external-ip=$$TURN_EXTERNAL_IP/$$(hostname -I | cut -d' ' -f1)"
+
+volumes:
+  pgdata:

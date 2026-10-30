@@ -1,0 +1,119 @@
+{% comment %}
+Bayonnoma (protokol) — mustaqil sahifa.
+
+Tashqi dashboard bu sahifani havola orqali ochadi (yangi oynada yoki iframe
+ichida), shuning uchun u hech narsaga bog'liq emas: CSS shu yerda, tashqi
+fayl yoki kutubxona yuklanmaydi.
+
+Ko'rinishi admin paneldagi protokol (frontend/src/Protocol.jsx) bilan bir xil
+tutilgan — bir xil hujjat ikki joyda boshqacha ko'rinmasligi kerak.
+{% endcomment %}<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bayonnoma — {{ p.full_name }}</title>
+<style>
+  :root { --ink:#101828; --muted:#667085; --line:#D0D5DD; --good:#0F9D58; --bad:#D92D20; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:28px; background:#F4F5F7; color:var(--ink);
+         font:14px/1.6 "Times New Roman", Georgia, serif; }
+  .sheet { max-width:820px; margin:0 auto; background:#fff; padding:38px 44px;
+           border:1px solid var(--line); border-radius:4px; }
+  h1 { font-size:20px; text-align:center; margin:0 0 22px; letter-spacing:.02em; }
+  h2 { font-size:15px; margin:26px 0 8px; }
+  .info div { margin-bottom:3px; }
+  .grade { margin-top:10px; font-size:15px; font-weight:700; }
+  table { border-collapse:collapse; }
+  .qwrap { display:flex; flex-direction:column; gap:10px; }
+  .qtable { width:100%; }
+  .qtable th { width:88px; text-align:left; }
+  .qtable th, .qtable td { border:1px solid var(--line); padding:4px 6px;
+                           text-align:center; font-size:13px; }
+  .qtable th { text-align:left; background:#F9FAFB; font-weight:600; }
+  .good { color:var(--good); font-weight:700; }
+  .wrong { color:var(--bad); font-weight:700; }
+  .topics { width:100%; }
+  .topics th, .topics td { border:1px solid var(--line); padding:6px 9px;
+                           font-size:13px; text-align:left; }
+  .topics th { background:#F9FAFB; font-weight:600; }
+  .footer { margin-top:30px; padding-top:16px; border-top:1px solid var(--line); }
+  .sign { margin-top:16px; }
+  .signrow { display:flex; gap:26px; flex-wrap:wrap; margin-top:14px; }
+  .objection { margin-top:22px; }
+  .line { border-bottom:1px solid var(--line); height:26px; }
+  .toolbar { max-width:820px; margin:0 auto 14px; text-align:right; }
+  .toolbar button { font:14px inherit; padding:8px 16px; border:1px solid var(--line);
+                    background:#fff; border-radius:6px; cursor:pointer; }
+  /* Chop etishda faqat hujjat qolsin. */
+  @media print {
+    body { background:#fff; padding:0; }
+    .sheet { border:0; max-width:none; padding:0; }
+    .toolbar { display:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="toolbar"><button onclick="window.print()">Chop etish / PDF saqlash</button></div>
+
+  <div class="sheet">
+    <h1>Bayonnoma</h1>
+
+    <div class="info">
+      <div>Test topshiruvchining ism-familiyasi: <b>{{ p.full_name }}</b>.</div>
+      <div>Bo'lim, sex: {{ p.department|default:"—" }}</div>
+      <div>Test topshirilgan sana: {{ p.date }}.</div>
+      <div>Boshlangan vaqti: {{ p.started_at|default:"—" }}. Tugagan vaqti: {{ p.finished_at }}.</div>
+      <div>Davomiyligi: {{ p.duration|default:"—" }}.</div>
+      <div>Test (lavozim) nomi: {{ p.test_name }}</div>
+      <div>Testdagi jami savollar soni: {{ p.total }}. Bajarilgan savollar: {{ p.attempted }}.</div>
+      <div>Shundan to'g'ri: {{ p.correct }} (bajarilgan savollarning {{ p.correct_pct }}%.)</div>
+      <div>Shundan xato: {{ p.wrong }} (bajarilgan savollarning {{ p.wrong_pct }}%).</div>
+      <div>Natijadorlik: {{ p.correct_pct }}%.</div>
+      <div>Tekshirishdan foydalanildi: {{ p.hints_used }} marta.</div>
+      <div>To'plangan ball: {{ p.points_earned }},0 / mumkin bo'lgan {{ p.points_total }},0 balldan.
+           Natija: {{ p.result_pct }}%.</div>
+      {% if p.violations %}<div>Sahifadan chiqishga urinishlar: {{ p.violations }} marta.</div>{% endif %}
+      <div class="grade">Baho: {{ p.grade }}.</div>
+    </div>
+
+    <h2>Natijalar jadvali</h2>
+    <div class="qwrap">
+      {% for group in question_rows %}
+        <table class="qtable">
+          <tr><th>Savol №</th>{% for q in group %}<td>{{ q.index }}</td>{% endfor %}</tr>
+          <tr><th>Natija</th>
+            {% for q in group %}
+              <td class="{% if q.is_correct %}good{% else %}wrong{% endif %}">{% if q.is_correct %}+{% else %}−{% endif %}</td>
+            {% endfor %}
+          </tr>
+          <tr><th>Vaqt</th>{% for q in group %}<td>{{ q.time }}</td>{% endfor %}</tr>
+        </table>
+      {% endfor %}
+    </div>
+
+    <h2>Mavzular bo'yicha natijalar jadvali</h2>
+    <table class="topics">
+      <tr><th>Mavzu</th><th>To'g'ri</th><th>Xato</th><th>Natijadorlik</th><th>O'rt. vaqt</th><th>O'rt. ball</th></tr>
+      {% for t in p.by_topic %}
+        <tr><td>{{ t.name }}</td><td>{{ t.correct }}</td><td>{{ t.wrong }}</td>
+            <td>{{ t.result_pct }}</td><td>{{ t.avg_time }}</td><td>{{ t.avg_points }}</td></tr>
+      {% endfor %}
+    </table>
+
+    <div class="footer">
+      <div>Sana: {{ p.generated_at }}.</div>
+      <div class="sign">Test administratori: ____________________</div>
+      <div class="signrow">
+        <span>Sana: {{ p.date }}</span>
+        <span>Imzo: ______________</span>
+        <span>Test topshiruvchi xodim: <b>{{ p.full_name }}</b></span>
+      </div>
+      <div class="objection">
+        <div>Xodimning e'tirozi (bo'lsa, qo'lda yoziladi):</div>
+        <div class="line"></div><div class="line"></div><div class="line"></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,6 @@
+# Sertifikat va MAXFIY kalit hech qachon repozitoriyga tushmasligi kerak.
+*.crt
+*.key
+*.pem
+*.csr
+!.gitignore

@@ -1,0 +1,28 @@
+# Ishlab chiqarish uchun frontend + teskari proksi (bitta konteyner).
+#
+# Vite dev-serveri o'rniga oldindan yig'ilgan statik fayllar beriladi, shu bilan
+# birga shu nginx TLS'ni yakunlaydi va /api, /media so'rovlarini backend'ga
+# uzatadi — natijada brauzer uchun hamma narsa BITTA manzil (origin) bo'ladi.
+# Bu HTTPS uchun asosiy shart: aks holda sahifa https'da, API esa http'da bo'lib,
+# brauzer so'rovlarni "mixed content" deb bloklaydi.
+#
+# IKKITA bundle yig'iladi, chunki ilova xodim ekranini yoki admin panelini
+# ko'rsatishni `VITE_ADMIN_ONLY` orqali hal qiladi va bu qiymat build paytida
+# kodga "muhrlanadi" — bitta bundle bilan ikkalasini berib bo'lmaydi.
+FROM node:20-alpine AS build
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+
+# 1) Xodim ilovasi -> /app/dist
+RUN npm run build
+# 2) Admin paneli  -> /app/dist-admin
+RUN VITE_ADMIN_ONLY=true npx vite build --outDir dist-admin
+
+FROM nginx:1.27-alpine
+COPY --from=build /app/dist       /usr/share/nginx/html/employee
+COPY --from=build /app/dist-admin /usr/share/nginx/html/admin
+# Sozlama va sertifikatlar docker-compose orqali ulanadi (volume) — ularni
+# o'zgartirish uchun image'ni qayta yig'ish shart emas.

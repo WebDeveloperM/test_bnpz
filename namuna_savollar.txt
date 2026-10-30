@@ -1,0 +1,67 @@
+1. Nasosning ish bosimi qancha bo'lishi kerak?
++5 bar
+-10 bar
+-15 bar
+#ru
+Каким должно быть рабочее давление насоса?
++5 бар
+-10 бар
+-15 бар
+#krill
+Насоснинг иш босими қанча бўлиши керак?
++5 бар
+-10 бар
+-15 бар
+
+2. Quyidagilardan qaysilari shaxsiy himoya vositasi hisoblanadi?
++Kaska
++Himoya qo'lqoplari
++Himoya ko'zoynagi
+-Gaechniy kalit
+#ru
+Что из перечисленного относится к средствам индивидуальной защиты?
++Каска
++Защитные перчатки
++Защитные очки
+-Гаечный ключ
+#krill
+Қуйидагилардан қайсилари шахсий ҳимоя воситаси ҳисобланади?
++Каска
++Ҳимоя қўлқоплари
++Ҳимоя кўзойнаги
+-Гаечний калит
+
+3. Nasos ishlaganda kuchli vibratsiya paydo bo'lsa, uni darhol to'xtatish kerak.
++To'g'ri
+-Noto'g'ri
+#ru
+При появлении сильной вибрации во время работы насоса его необходимо немедленно остановить.
++Верно
+-Неверно
+#krill
+Насос ишлаганда кучли вибрация пайдо бўлса, уни дарҳол тўхтатиш керак.
++Тўғри
+-Нотўғри
+
+4. Nasosning nominal ish bosimini yozing (o'lchov birligi bilan)
+=5 bar
+#ru
+Укажите номинальное рабочее давление насоса (с единицей измерения)
+=5 бар
+#krill
+Насоснинг номинал иш босимини ёзинг (ўлчов бирлиги билан)
+=5 бар
+
+5. Ish joyida yong'in chiqqanda birinchi navbatda nima qilinadi?
++Yong'in xavfsizligi xizmatiga xabar beriladi
+-O'chirishga mustaqil kirishiladi
+-Smena tugashini kutiladi
+#ru
+Что делается в первую очередь при возникновении пожара на рабочем месте?
++Сообщается в службу пожарной безопасности
+-Приступают к тушению самостоятельно
+-Ожидают окончания смены
+
+6. Bu savol faqat o'zbek tilida qoladi — tarjimasi ko'rsatilmagan
++Ha
+-Yoq
