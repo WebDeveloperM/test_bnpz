@@ -81,10 +81,16 @@ DATABASES = {
         "PASSWORD": os.environ.get("DB_PASSWORD", "mytest"),
         "HOST": os.environ.get("DB_HOST", "db"),
         "PORT": os.environ.get("DB_PORT", "5432"),
-        # 0 = ulanish har so'rovdan keyin yopiladi. BU QIYMAT SHUNDAY QOLISHI
-        # KERAK — 60 ga qo'yib ko'rildi va ZARAR qildi.
+        # Standart 0 = ulanish har so'rovdan keyin yopiladi. `manage.py
+        # runserver` bilan BU QIYMAT SHUNDAY QOLISHI KERAK — 60 ga qo'yib
+        # ko'rildi va ZARAR qildi (quyida).
         #
-        # O'lchangan. Foydasi umuman yo'q edi (30 ta so'rov):
+        # Konteynerda esa `serve.py` (waitress) ishlaydi: oqimlar soni cheklangan
+        # va ular qayta ishlatiladi, shuning uchun u `DB_CONN_MAX_AGE` ni o'zi
+        # o'rnatadi. U yerda ulanishlar soni oqimlar sonidan oshmaydi — quyidagi
+        # "to'planib qolish" holati yuz bermaydi.
+        #
+        # runserver bilan o'lchangan. Foydasi umuman yo'q edi (30 ta so'rov):
         #   CONN_MAX_AGE=0  -> 29 ta yangi ulanish, median 51.6 ms
         #   CONN_MAX_AGE=60 -> 29 ta yangi ulanish, median 47.6 ms
         # Chunki `runserver` har so'rovga YANGI OQIM yaratadi, Django esa
@@ -102,14 +108,25 @@ DATABASES = {
         #   UnicodeDecodeError: 'utf-8' codec can't decode byte 0xc2 ...
         # ko'rinadi. Bu kodlash muammosi EMAS, ulanishlar tugagani.
         #
-        # Oqimlarni qayta ishlatadigan serverga (gunicorn --threads) o'tilsa,
-        # bu sozlamani qayta ko'rib chiqish mumkin — lekin faqat o'lchov bilan.
-        "CONN_MAX_AGE": 0,
+        "CONN_MAX_AGE": int(os.environ.get("DB_CONN_MAX_AGE") or "0"),
         # Qayta ishlatilayotgan ulanish uzilib qolgan bo'lishi mumkin (baza
         # qayta ishga tushgan, tarmoq uzilgan). Django uni so'rov boshida
         # tekshiradi va kerak bo'lsa jimgina qaytadan ochadi — busiz birinchi
         # so'rov "server ishlamayapti" xatosi bilan qaytardi.
         "CONN_HEALTH_CHECKS": True,
+        "OPTIONS": {
+            # Javobsiz qolgan ulanish urinishi (paket jimgina tashlab yuborilsa)
+            # aks holda TCP'ning o'z chegarasigacha — ~2 daqiqa — osilib turardi
+            # va o'sha paytda server oqimini band qilib qo'yardi.
+            "connect_timeout": 10,
+            # Ulanish endi so'rovlar orasida ochiq turadi. Docker Desktop tarmog'i
+            # bo'sh ulanishni ogohlantirmasdan uzib qo'ysa, bu ~1 daqiqada
+            # aniqlanadi va keyingi so'rov osilmasdan yangi ulanish ochadi.
+            "keepalives": 1,
+            "keepalives_idle": 30,
+            "keepalives_interval": 10,
+            "keepalives_count": 3,
+        },
     }
 }
 
@@ -137,6 +154,10 @@ LOGGING = {
         "django.request": {"handlers": ["console"], "level": "ERROR", "propagate": False},
         # Baza bilan bog'liq muammolar (ulanish tugashi, uzilish).
         "django.db.backends": {"handlers": ["console"], "level": "ERROR", "propagate": False},
+        # HTTP server (serve.py). Eng muhim xabari — "Task queue depth is N":
+        # barcha oqimlar band va so'rovlar navbatda kutyapti, ya'ni server
+        # yukni ko'tara olmayapti. Sekinlik qaytsa, birinchi shu qidiriladi.
+        "waitress": {"handlers": ["console"], "level": "WARNING", "propagate": False},
     },
 }
 

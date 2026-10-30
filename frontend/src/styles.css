@@ -671,7 +671,13 @@ select.field { cursor: pointer; }
 .pager { display: flex; align-items: center; justify-content: space-between; gap: 12px;
   margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--adm-border);
   font-size: 13px; color: var(--adm-muted); }
-.pager-btns { display: flex; gap: 8px; }
+.pager-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.pager-gap { align-self: center; color: var(--adm-muted); padding: 0 2px; }
+/* Jadval ustidagi "Ko'rinish: [10 ▾]" — bir sahifadagi qatorlar soni. */
+.table-top { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.page-size { display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--adm-muted); }
+.page-size .field.sm { margin: 0; }
 
 /* Tizim holati — ko'rsatkichlar kartochkalari */
 .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));

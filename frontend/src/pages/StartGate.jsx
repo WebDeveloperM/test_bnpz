@@ -90,7 +90,10 @@ export default function StartGate({ session, t, lang, onLang, recRef, uploaderRe
       {offer && (
         <div className="offer-box">
           <div className="offer-box-title">{t.offer_title}</div>
-          {offer.video && <video className="offer-video" src={offer.video} controls />}
+          {/* preload="metadata": video faqat "Play" bosilganda yuklanadi. Aks
+              holda brauzer har bir xodim uchun katta videoni darhol yuklashga
+              tushardi — 10 kishi birga kirganda shuncha marta. */}
+          {offer.video && <video className="offer-video" src={offer.video} controls preload="metadata" />}
           {offer.text && <div className="intro-text offer-box-text">{offer.text}</div>}
           <label className="chk">
             <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />

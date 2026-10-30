@@ -6,9 +6,44 @@ import {
 } from "../adminApi.js";
 import { IconUsers, IconPlus, IconTrash, IconCamera, IconKey, IconClose } from "./icons.jsx";
 
+// Jadvalda bir sahifada nechta xodim ko'rsatiladi — "Ko'rinish" tanlovi.
+// Ro'yxat serverdan bir so'rovda to'liq keladi (yuzlab qator — yengil), shuning
+// uchun sahifalash shu yerda, brauzerda bajariladi.
+const PAGE_SIZES = [10, 25, 50, 100, 500, 1000];
+// Tanlangan o'lcham shu brauzerda eslab qolinadi — admin har safar qayta tanlamasin.
+const PAGE_SIZE_KEY = "bnpztest_expected_page_size";
+
+function loadPageSize() {
+  try {
+    const saved = Number(localStorage.getItem(PAGE_SIZE_KEY));
+    return PAGE_SIZES.includes(saved) ? saved : PAGE_SIZES[0];
+  } catch {
+    return PAGE_SIZES[0];
+  }
+}
+
+// Sahifa raqamlari: birinchi, oxirgi va joriy sahifa yonidagilari, oradagi
+// bo'shliq "…" bilan. 45 sahifani bittalab chiqarish tugmalar qatorini buzardi.
+function pageNumbers(current, total) {
+  const wanted = [1, current - 1, current, current + 1, total]
+    .filter((p, i, all) => p >= 1 && p <= total && all.indexOf(p) === i)
+    .sort((a, b) => a - b);
+  const out = [];
+  wanted.forEach((p, i) => {
+    const gap = i > 0 ? p - wanted[i - 1] : 1;
+    // Bitta sahifalik bo'shliqqa "…" qo'yish ma'nosiz — o'sha raqamning o'zi chiqadi.
+    if (gap === 2) out.push(p - 1);
+    else if (gap > 2) out.push("…");
+    out.push(p);
+  });
+  return out;
+}
+
 export default function ExpectedEmployeesTab() {
   const [expected, setExpected] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [pageSize, setPageSize] = useState(loadPageSize);
+  const [page, setPage] = useState(1);
   const [addOpen, setAddOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
@@ -303,6 +338,23 @@ export default function ExpectedEmployeesTab() {
       setManualBusy(false);
     }
   }
+  // Xodim olib tashlansa (yoki ro'yxat tozalansa) sahifalar soni kamayadi —
+  // `page` mavjud bo'lmagan sahifada qolib, jadval bo'sh ko'rinmasligi uchun
+  // amalda doim chegaralangan qiymat (`pageSafe`) ishlatiladi.
+  const totalPages = Math.max(1, Math.ceil(expected.length / pageSize));
+  const pageSafe = Math.min(page, totalPages);
+  const firstIdx = (pageSafe - 1) * pageSize;
+  const pageItems = expected.slice(firstIdx, firstIdx + pageSize);
+
+  function changePageSize(size) {
+    // O'lcham o'zgarganda hozir ko'rinib turgan birinchi xodim ekranda qoladi.
+    setPage(Math.floor(firstIdx / size) + 1);
+    setPageSize(size);
+    try {
+      localStorage.setItem(PAGE_SIZE_KEY, String(size));
+    } catch { /* saqlanmasa ham sahifa ishlayveradi */ }
+  }
+
   async function removeManual(id) {
     if (!window.confirm("Bu xodim o'chirilsinmi?")) return;
     setBusyId(id);
@@ -354,6 +406,19 @@ export default function ExpectedEmployeesTab() {
             </button>
           </div>
         </div>
+        {/* Tanlov eng kichik o'lchamdan ko'p xodim bo'lganda chiqadi — "1000"
+            tanlangan bo'lsa ham, uni qaytarib o'zgartirish imkoni qolishi kerak. */}
+        {expected.length > PAGE_SIZES[0] && (
+          <div className="table-top">
+            <label className="page-size">
+              Ko'rinish:
+              <select className="field sm" value={pageSize}
+                onChange={(e) => changePageSize(Number(e.target.value))}>
+                {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+          </div>
+        )}
         <div className="adm-table-wrap">
           <table className="admin-table">
             <thead>
@@ -362,9 +427,9 @@ export default function ExpectedEmployeesTab() {
               </tr>
             </thead>
             <tbody>
-              {expected.map((e, i) => (
+              {pageItems.map((e, i) => (
                 <tr key={e.id}>
-                  <td className="col-num">{i + 1}</td>
+                  <td className="col-num">{firstIdx + i + 1}</td>
                   <td>{e.full_name}</td>
                   <td>{e.tabel_number || "—"}</td>
                   <td>{e.department_name || "—"}</td>
@@ -388,6 +453,24 @@ export default function ExpectedEmployeesTab() {
             </tbody>
           </table>
         </div>
+
+        {totalPages > 1 && (
+          <div className="pager">
+            <span>{firstIdx + 1}–{firstIdx + pageItems.length} / {expected.length}</span>
+            <div className="pager-btns">
+              <button className="btn2 sm" disabled={pageSafe <= 1}
+                onClick={() => setPage(pageSafe - 1)}>← Oldingi</button>
+              {pageNumbers(pageSafe, totalPages).map((p, i) => (p === "…"
+                ? <span key={`gap-${i}`} className="pager-gap">…</span>
+                : (
+                  <button key={p} className={"btn2 sm" + (p === pageSafe ? " primary" : "")}
+                    onClick={() => setPage(p)}>{p}</button>
+                )))}
+              <button className="btn2 sm" disabled={pageSafe >= totalPages}
+                onClick={() => setPage(pageSafe + 1)}>Keyingi →</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* --- Nomzodlar yon paneli --- */}

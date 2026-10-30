@@ -3,6 +3,7 @@ import io
 import logging
 import mimetypes
 import os
+import posixpath
 import random
 import re
 import struct
@@ -11,12 +12,13 @@ import time
 import uuid
 import zipfile
 from collections import OrderedDict
-from datetime import date
-from django.db import transaction
-from django.db.models import Q
+from datetime import date, timedelta
+from django.db import connection, transaction
+from django.db.models import Count, Max, Q
 from django.http import HttpResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.utils import timezone
+from django.views.static import serve as media_serve
 from rest_framework.views import APIView
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.parsers import MultiPartParser
@@ -1186,7 +1188,6 @@ class RecordingUploadView(APIView):
                 with open(existing.file.path, "wb") as fh:
                     for piece in file.chunks():
                         fh.write(piece)
-                cache.delete(REC_SIZE_CACHE_KEY)
                 return Response(status=status.HTTP_201_CREATED)
 
             full_name = attempt.employee.full_name if attempt.employee else "xodim"
@@ -1213,8 +1214,8 @@ class RecordingUploadView(APIView):
                 tabel_number=(attempt.employee.tabel_number if attempt.employee else ""),
                 tsex=(attempt.test.tsex if attempt.test else ""),
             )
-        # "Tizim holati" dagi keshlangan disk hajmi eskirmasin.
-        cache.delete(REC_SIZE_CACHE_KEY)
+        # "Tizim holati" dagi disk hajmi keshi bu yerda ATAYLAB tozalanmaydi —
+        # sababi `_recordings_total_bytes` izohida.
         return Response(status=status.HTTP_201_CREATED)
 
     @staticmethod
@@ -1236,7 +1237,6 @@ class RecordingUploadView(APIView):
             with open(rec.file.path, "ab") as fh:
                 for piece in file.chunks():
                     fh.write(piece)
-        cache.delete(REC_SIZE_CACHE_KEY)
         return Response(status=status.HTTP_201_CREATED)
 
 
@@ -1869,6 +1869,9 @@ class AdminEmployeeSyncView(APIView):
                 call_command("sync_employees")
             finally:
                 AdminEmployeeSyncView._running = False
+                # Bu oqim so'rov emas — Django uning ulanishini o'zi yopmaydi,
+                # ulanishlar esa endi qayta ishlatiladi (DB_CONN_MAX_AGE).
+                connection.close()
 
         threading.Thread(target=run, daemon=True).start()
         return Response({"ok": True, "message": "Sinxronizatsiya fonda boshlandi."})
@@ -2108,7 +2111,10 @@ class TestAdminViewSet(viewsets.ModelViewSet):
     authentication_classes = [AdminTokenAuthentication]
     permission_classes = [IsAdmin]
     required_write_permission = "tests"
-    queryset = Test.objects.all().order_by("-created")
+    # Savollar soni bitta so'rovda sanaladi (qarang: TestAdminSerializer.question_count).
+    # "Kutish ro'yxati" bu ro'yxatni har test boshlanganda qayta so'raydi.
+    queryset = (Test.objects.annotate(question_count_annotated=Count("questions"))
+                .order_by("-created"))
     serializer_class = TestAdminSerializer
 
     def perform_create(self, serializer):
@@ -2378,7 +2384,8 @@ class EmployeeAdminViewSet(viewsets.ModelViewSet):
     authentication_classes = [AdminTokenAuthentication]
     permission_classes = [IsAdmin]
     required_permission = "expected"
-    queryset = Employee.objects.all().order_by("-created")
+    # `assigned_test_name` uchun — usiz har xodimga alohida so'rov ketardi.
+    queryset = Employee.objects.select_related("assigned_test").order_by("-created")
     serializer_class = EmployeeAdminSerializer
 
     def perform_create(self, serializer):
@@ -2411,9 +2418,13 @@ class AdminActiveAttemptsView(APIView):
     def get(self, request):
         # Testi yoki xodimi o'chirilgan seans "hozir topshirilmoqda" bo'la
         # olmaydi — u arxivda qoladi, lekin jonli ro'yxatga chiqmaydi.
-        attempts = (Attempt.objects
-                    .filter(completed=False, test__isnull=False, employee__isnull=False)
-                    .select_related("employee", "test").order_by("-created"))
+        # `defer`: variantlar tartibi va qulflangan javoblar bu ro'yxatga kerak
+        # emas, ular esa seansdagi eng katta maydonlar.
+        attempts = (_maybe_live_attempts()
+                    .filter(test__isnull=False, employee__isnull=False)
+                    .select_related("employee", "test")
+                    .defer("layout", "locked_answers")
+                    .order_by("-created"))
         now = timezone.now()
         data = []
         for a in attempts:
@@ -2634,7 +2645,11 @@ class AdminResultsListView(ListAPIView):
     authentication_classes = [AdminTokenAuthentication]
     permission_classes = [IsAdmin]
     required_permission = "results"
-    queryset = Result.objects.all()
+    # `select_related("test")`: ro'yxatdagi `tsex` ustuni testdan olinadi —
+    # usiz HAR BIR natija uchun alohida so'rov ketardi (1500 natija = 1500 so'rov).
+    # `defer("answers")`: savol-javob tahlili ro'yxatda ko'rsatilmaydi, lekin
+    # u natijadagi eng katta maydon — har ochilishda megabaytlab ortiqcha ma'lumot.
+    queryset = Result.objects.select_related("test").defer("answers")
     serializer_class = ResultSerializer
 
 
@@ -3111,16 +3126,23 @@ class AdminRecordingsArchiveView(APIView):
 
 
 REC_SIZE_CACHE_KEY = "sysstatus_recordings_total_bytes"
+# Hajm shuncha vaqtda bir qayta hisoblanadi — "Tizim holati" uchun yetarli aniqlik.
+REC_SIZE_CACHE_TTL = 10 * 60
 
 
 def _recordings_total_bytes():
     """Barcha video yozuvlarning umumiy hajmi (bayt). KESHLANADI.
 
-    Ilgari bu qiymat "Tizim holati" har ochilganda (va har 15 soniyalik jonli
-    yangilanishda) qayta hisoblanardi: har bir yozuv fayli uchun diskka alohida
-    `os.stat` chaqiruvi ketardi. Yuzlab fayl va Docker'da mount qilingan disk
-    bilan bu sezilarli sekinlik berardi. Endi natija keshda turadi va faqat
-    yangi yozuv qo'shilganda/o'chirilganda yangilanadi (qarang: cache.delete)."""
+    Hisoblash qimmat: har bir yozuv fayli uchun diskka alohida `os.stat`
+    ketadi, disk esa Docker Desktop orqali ulangan Windows papkasi (har
+    murojaat sekin). Yuzlab fayl bilan bu soniyalar oladi.
+
+    Ilgari kesh har yozuvda — HAR BIR VIDEO BO'LAGIDA ham — tozalanardi. Test
+    paytida bo'lak har xodimdan 10 soniyada bir keladi, ya'ni 10 xodimda kesh
+    sekundiga bir marta o'chardi va "Tizim holati" (har 15 soniyada so'raydi)
+    amalda HAR SAFAR butun arxivni qaytadan o'lchardi — aynan eng band paytda.
+    Endi yuklash keshga tegmaydi: qiymat ko'pi bilan `REC_SIZE_CACHE_TTL`
+    eskiradi. O'chirishda esa (kamdan-kam amal) darhol yangilanadi."""
     cached = cache.get(REC_SIZE_CACHE_KEY)
     if cached is not None:
         return cached
@@ -3130,8 +3152,28 @@ def _recordings_total_bytes():
             total += r.file.size if r.file else 0
         except (OSError, ValueError):
             pass  # diskda yo'q fayl — hisobga olinmaydi
-    cache.set(REC_SIZE_CACHE_KEY, total, 60 * 60)  # 1 soat (yozuvda baribir tozalanadi)
+    cache.set(REC_SIZE_CACHE_KEY, total, REC_SIZE_CACHE_TTL)
     return total
+
+
+def _maybe_live_attempts():
+    """Hali davom etayotgan BO'LISHI MUMKIN bo'lgan seanslar — SQL darajasida.
+
+    Yakunlanmagan seanslar jadvalda abadiy qoladi (brauzer yopilgan, boshlanmay
+    qolgan va h.k.) va vaqt o'tgan sari ko'payadi. Ilgari "Faol seanslar" (har
+    5 soniyada) va "Tizim holati" (har 15 soniyada) ularning HAMMASINI, katta
+    JSON maydonlari bilan birga bazadan olib, tashlab ketilganlarini Python'da
+    ajratardi.
+
+    Tashlab ketilmagan seans `_is_stale_attempt` ga ko'ra eng ko'pi bilan
+    max(STALE_ATTEMPT_SECONDS, eng uzun vaqt chegarasi) oldin boshlangan
+    bo'ladi — shundan eskisi bazadan umuman olinmaydi. Aniq tekshiruv
+    (`_is_stale_attempt`) chaqiruvchida o'zgarishsiz qoladi."""
+    longest_minutes = Test.objects.aggregate(m=Max("time_limit"))["m"] or 0
+    window = max(STALE_ATTEMPT_SECONDS, longest_minutes * 60)
+    return Attempt.objects.filter(
+        completed=False, created__gte=timezone.now() - timedelta(seconds=window),
+    )
 
 
 class AdminSystemStatusView(APIView):
@@ -3146,7 +3188,8 @@ class AdminSystemStatusView(APIView):
 
         total_bytes = _recordings_total_bytes()
 
-        active = [a for a in Attempt.objects.filter(completed=False).select_related("test")
+        active = [a for a in _maybe_live_attempts().select_related("test")
+                  .only("created", "test", "test__time_limit", "test__time_limit_scope")
                   if not _is_stale_attempt(a)]
 
         synced = SyncedEmployee.objects.all()
@@ -3483,6 +3526,22 @@ def media_recordings_view(request, path):
     return HttpResponse("Video yozuvlar faqat ruxsati bor administratorlar uchun.", status=403)
 
 
+def public_media_view(request, path):
+    """Ochiq media — savol/variant rasmlari, oferta videosi (qarang: urls.py).
+
+    Yo'l avval `django.views.static.serve` ning o'zi kabi normallashtiriladi;
+    natija video yozuvlar papkasiga tushsa, so'rov ruxsat tekshiruvi bor
+    `media_recordings_view` ga yuboriladi. Harflar katta-kichikligi hisobga
+    olinmaydi: serverdagi disk — Windows papkasi, u harflarni farqlamaydi,
+    `media/recordings/` marshruti esa farqlaydi. Usiz yozuvlar papkasiga shu
+    ochiq marshrut orqali ham yetib borish mumkin edi."""
+    normalized = posixpath.normpath(path).lstrip("/")
+    top, _sep, rest = normalized.partition("/")
+    if top.lower() == "recordings":
+        return media_recordings_view(request, rest)
+    return media_serve(request, path, document_root=django_settings.MEDIA_ROOT)
+
+
 class AdminRecordingDeleteView(APIView):
     """Bitta video yozuvni o'chiradi — FAQAT superuser.
 
@@ -3615,7 +3674,7 @@ class AdminResultsCsvView(APIView):
         response.write("﻿")  # Excelda kirill/lotin harflar to'g'ri ko'rinishi uchun BOM
         writer = csv.writer(response)
         writer.writerow(["Ism-familiya", "Lavozim (test)", "To'g'ri", "Jami", "Foiz", "Baho", "Natija", "Sana"])
-        for r in Result.objects.all():
+        for r in Result.objects.defer("answers"):
             writer.writerow([
                 r.full_name, r.test_name, r.correct, r.total, r.pct, r.grade,
                 "O'tdi" if r.passed else "O'tmadi", r.created.strftime("%Y-%m-%d %H:%M"),

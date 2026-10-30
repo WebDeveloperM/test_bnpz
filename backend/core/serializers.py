@@ -239,7 +239,13 @@ class QuestionAdminSerializer(serializers.ModelSerializer):
 
 
 class TestAdminSerializer(serializers.ModelSerializer):
-    question_count = serializers.IntegerField(source="questions.count", read_only=True)
+    question_count = serializers.SerializerMethodField()
+
+    def get_question_count(self, obj):
+        # Ro'yxatda son `annotate` bilan bitta so'rovda keladi (TestAdminViewSet).
+        # Yangi yaratilgan test javobida annotatsiya bo'lmaydi — o'shanda sanaymiz.
+        annotated = getattr(obj, "question_count_annotated", None)
+        return annotated if annotated is not None else obj.questions.count()
 
     class Meta:
         model = Test

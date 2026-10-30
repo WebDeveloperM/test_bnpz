@@ -15,6 +15,8 @@ COPY . .
 
 EXPOSE 8000
 
-# `--insecure`: DEBUG=0 bo'lsa ham /static (Django admin, /it-center) fayllarini
-# uzatishda davom etadi. Bu bayroq faqat statika uchun — DEBUG holatiga ta'sir qilmaydi.
-CMD ["sh", "-c", "python manage.py migrate && python manage.py runserver 0.0.0.0:8000 --insecure"]
+# HTTP server — `serve.py` (waitress, bitta jarayon, cheklangan oqimlar havzasi).
+# Nega runserver emasligi va eski serverga qanday qaytish — o'sha faylda.
+# `exec`: server PID 1 bo'ladi va `docker stop` signalini o'zi oladi (ilgari
+# `sh` uni e'tiborsiz qoldirar, to'xtatish har safar 10 soniya kutardi).
+CMD ["sh", "-c", "python manage.py migrate && exec python serve.py"]

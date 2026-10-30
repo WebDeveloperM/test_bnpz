@@ -55,6 +55,9 @@ services:
       # Tashqi dashboard uchun ochiq endpoint kaliti (/api/public/protocol/).
       # BO'SH bo'lsa endpoint hech narsa so'ramaydi — standart holat shu.
       PUBLIC_API_KEY: ${PUBLIC_API_KEY:-}
+      # HTTP server: waitress (standart) yoki eski `runserver` ga qaytish uchun
+      # .env ga WSGI_SERVER=runserver. Batafsil: backend/serve.py.
+      WSGI_SERVER: ${WSGI_SERVER:-waitress}
 
   # --- Ishlab chiqish (dev) servislari -------------------------------------
   # Odatda ISHGA TUSHMAYDI: ular "dev" profilida. Ishlab chiqarishda xodimlar
@@ -108,6 +111,9 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/certs:/etc/nginx/certs:ro
+      # Savol rasmlari va oferta videosini nginx o'zi beradi (qarang: nginx.conf,
+      # "/media/(questions|options|offer)"). Faqat o'qish uchun.
+      - ./backend/media:/srv/media:ro
     depends_on:
       - backend
 
