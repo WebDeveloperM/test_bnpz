@@ -5,8 +5,12 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core \
-    && rm -rf /var/lib/apt/lists/*
+# Tizim paketlari (apt) ATAYLAB o'rnatilmaydi. Ilgari bu yerda `fonts-dejavu-core`
+# bor edi, lekin uni ishlatadigan kod yo'q (protokol HTML, PDF'ni brauzer
+# chop etadi). Shu keraksiz qadam serverda build'ni yiqitgan: tarmoqdagi
+# proksi Debian paketlar ro'yxatining eski nusxasini berib, apt "Hash Sum
+# mismatch" bilan to'xtagan. Endi build faqat Docker Hub va PyPI'ga (HTTPS)
+# bog'liq. Kelajakda apt kerak bo'lsa — manbalarni https:// ga o'tkazing.
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
