@@ -13,6 +13,7 @@ import uuid
 import zipfile
 from collections import OrderedDict
 from datetime import date, timedelta
+from urllib.parse import quote
 from django.db import connection, transaction
 from django.db.models import Count, Max, Q
 from django.http import HttpResponse, StreamingHttpResponse
@@ -2638,7 +2639,7 @@ class PublicRecordingView(APIView):
         if not rec or not rec.file or not os.path.isfile(rec.file.path):
             return HttpResponse("Video yozuv topilmadi.", status=404)
         _ensure_recording_duration_fixed(rec, rec.file.path)
-        return _serve_video_range(request, rec.file.path)
+        return _serve_recording(request, rec.file.path)
 
 
 class AdminResultsListView(ListAPIView):
@@ -3324,6 +3325,39 @@ def _serve_video_range(request, file_path):
     return response
 
 
+# nginx'ning ichki manzili — qarang: nginx.conf, `location /_recordings/`.
+_RECORDINGS_ACCEL_PREFIX = "/_recordings/"
+
+
+def _serve_recording(request, file_path):
+    """Video yozuv faylini uzatadi. Ruxsat ALLAQACHON tekshirilgan bo'lishi shart.
+
+    So'rov yangi nginx orqali kelgan bo'lsa (u `X-Media-Accel: 1` qo'yadi),
+    Django faqat `X-Accel-Redirect` javobini qaytaradi va baytlarni nginx'ning
+    o'zi beradi — Range ham, sakrash ham nginx'da. Fayl Python'dan o'tmaydi.
+
+    Nega: ilgari fayl `_serve_video_range` orqali Python'da oqizilardi, nginx
+    esa javobni o'z buferiga OXIRIGACHA tortib olardi. "Test natijalari"da
+    "Batafsil" ochilishi bilan (<video preload>) butun yozuv — o'nlab, ba'zan
+    yuzlab MB — Python va sekin Windows papkasi orqali o'qilardi, admin videoni
+    ko'rmasa ham. Yuk ostida bu butun panelni qotirardi.
+
+    Sarlavha bo'lmasa (nginx.conf hali yangilanmagan) — avvalgidek Python
+    orqali beriladi, ya'ni backend va nginx'ni alohida yangilash xavfsiz."""
+    if request.headers.get("X-Media-Accel") == "1":
+        rel = os.path.relpath(file_path, django_settings.MEDIA_ROOT / "recordings")
+        if not rel.startswith(".."):
+            # Content-Type ochiq beriladi: nginx Django javobidagi turni saqlaydi,
+            # standart "text/html" qolsa brauzer videoni ochmasdi.
+            response = HttpResponse(
+                content_type=mimetypes.guess_type(str(file_path))[0] or "application/octet-stream",
+            )
+            # Fayl nomida xodim ismi (kirill harflari) bor — nginx uni o'zi qaytarib dekodlaydi.
+            response["X-Accel-Redirect"] = _RECORDINGS_ACCEL_PREFIX + quote(rel.replace(os.sep, "/"))
+            return response
+    return _serve_video_range(request, file_path)
+
+
 # --- WebM sarlavhasiga davomiylik yozish (sof Python, tashqi vositasiz) ------
 #
 # `RecordingUploadView` faylni bo'lak-bo'lak xom holda yozadi (qarang:
@@ -3522,7 +3556,7 @@ def media_recordings_view(request, path):
         recording = Recording.objects.filter(file=f"recordings/{path}").first()
         if recording:
             _ensure_recording_duration_fixed(recording, full_path)
-        return _serve_video_range(request, full_path)
+        return _serve_recording(request, full_path)
     return HttpResponse("Video yozuvlar faqat ruxsati bor administratorlar uchun.", status=403)
 
 

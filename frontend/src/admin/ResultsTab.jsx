@@ -298,7 +298,12 @@ export default function ResultsTab() {
                   {detail.recordings.map((r) => (
                     <div className="rec-item" key={r.id}>
                       <div className="rec-item-label">{r.kind === "screen" ? "Video (ekran + yuz)" : "Yuz (kamera)"}</div>
-                      <video src={r.url} controls preload="metadata" onLoadedMetadata={fixVideoDuration} />
+                      {/* preload="none": yozuv Play bosilgandagina yuklanadi.
+                          "metadata" bilan "Batafsil" har ochilganda video
+                          so'rov boshlanar va server butun faylni o'qib
+                          chiqardi — admin javoblarni ko'rish uchun ochgan
+                          bo'lsa ham. */}
+                      <video src={r.url} controls preload="none" onLoadedMetadata={fixVideoDuration} />
                       <button
                         className="btn2 sm"
                         onClick={() => handleDownloadRecording(r)}
